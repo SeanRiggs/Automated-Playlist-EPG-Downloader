@@ -46,7 +46,7 @@ git clone https://github.com/SeanRiggs/automated-playlist-epg-downloader.git
 ```bash
 sudo apt-get update
 sudo apt-get install git dos2unix curl
-``
+```
 **install docker**
 ```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
