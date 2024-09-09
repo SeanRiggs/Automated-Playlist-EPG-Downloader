@@ -101,6 +101,11 @@ fi
 
 echo "Script ended at $(date)" >> $LOGFILE
 ```
+#### Step 5.5: make the script executable:
+```bash
+chmod +x /path/to/file/m3u4u.sh
+```
+
 ### Step 6: Automate with Cron
 To ensure the script runs daily, create a cron job:
 ```bash
