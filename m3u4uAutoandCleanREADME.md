@@ -64,12 +64,12 @@ Add your user to the “docker” group to run Docker commands without sudo:
 ```bash
 sudo usermod -aG docker $USER
 ```
- make the script executable:
+**make the script executable:**
 ```bash
 chmod +x /opt/mediastream/m3ufiles/m3u4uAutoandClean.sh
 ```
 
-Automate with Cron
+**Automate with Cron**
 To ensure the script runs daily, create a cron job:
 ```bash
 crontab -e
