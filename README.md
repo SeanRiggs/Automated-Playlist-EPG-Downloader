@@ -5,6 +5,8 @@ This repository provides a simple, automated solution for downloading M3U playli
 
 By leveraging the flexibility and customization that **m3u4u** offers, users can automate fetching updated playlists and EPGs while avoiding being banned for exceeding server rate limits. This solution allows media server software, such as **Jellyfin**, **Plex**, **Emby**, or **Kodi**, to pull the latest TV data from a local directory, reducing the need for repeated requests to the server.
 
+**if you also would like to include a m3u playlist cleaner/scrubber to eliminate deadlinks or duplicate channels see the automated ReadME in the files** Link: https://github.com/SeanRiggs/Automated-Playlist-EPG-Downloader/blob/main/m3u4uAutoandCleanREADME.md
+
 ## Why Use **m3u4u**?
 
 **m3u4u** is a feature-rich platform that simplifies the management of IPTV playlists and EPGs. Here’s why it’s the recommended choice:
