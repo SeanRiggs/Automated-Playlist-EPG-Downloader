@@ -1,161 +1,155 @@
-# [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&color=510EF7&width=435&lines=Automate+Playlist+and+EPG+Downloads)](https://git.io/typing-svg)
-## Overview
+# Automated Playlist & EPG Downloader
 
-This repository provides a simple, automated solution for downloading M3U playlists and EPG (Electronic Program Guide) files using **m3u4u.com**, one of the most powerful tools for managing IPTV playlists and EPG data. 
+A dependable local copy of your channel list and TV guide—even when the next download fails.
 
-By leveraging the flexibility and customization that **m3u4u** offers, users can automate fetching updated playlists and EPGs while avoiding being banned for exceeding server rate limits. This solution allows media server software, such as **Jellyfin**, **Plex**, **Emby**, or **Kodi**, to pull the latest TV data from a local directory, reducing the need for repeated requests to the server.
+Download an extended M3U/M3U8 playlist and XMLTV guide, validate both, optionally check channels with a Docker cleaner, then publish `playlist.m3u` and `epg.xml` for your media server. The original shell entry points remain available; a shared Python implementation now handles downloads and validation.
 
-**if you also would like to include a m3u playlist cleaner/scrubber to eliminate deadlinks or duplicate channels see the automated ReadME in the files** Link: https://github.com/SeanRiggs/Automated-Playlist-EPG-Downloader/blob/main/m3u4uAutoandCleanREADME.md
+[![Tests](https://github.com/SeanRiggs/Automated-Playlist-EPG-Downloader/actions/workflows/test.yml/badge.svg)](https://github.com/SeanRiggs/Automated-Playlist-EPG-Downloader/actions/workflows/test.yml)
 
-## Why Use **m3u4u**?
+## Does this still help with m3u4u's cloud downloads?
 
-**m3u4u** is a feature-rich platform that simplifies the management of IPTV playlists and EPGs. Here’s why it’s the recommended choice:
+**Yes, when you want local files, controlled refreshes, backups, or optional channel checks.** If your player already reads your cloud playlist and guide reliably and you do not need those features, you can use those URLs directly without this project.
 
-- **Customizable Playlists**: You can create and organize your IPTV channels precisely how you want, grouping them by category, adding custom names, and filtering out channels you don’t need.
-- **EPG Integration**: It supports powerful EPG management, pulling from various sources and automatically aligning your channels with the correct program data.
-- **URL-Based Access**: **m3u4u** generates URLs for your playlist and EPG, which can be easily integrated into media server software. This flexibility makes it a fantastic choice for automating live TV solutions.
-- **Rate Limit Protection**: Like most IPTV and EPG services, **m3u4u** enforces rate limits on the number of requests made. To prevent getting banned for frequent updates, this script will download the latest files only once every 24 hours, ensuring compliance with their policies.
-  
-This repository focuses on automating the download process to fully take advantage of **m3u4u**'s abilities. It ensures your media server pulls live TV data from a local source and reduces the risk of server overload.
+Set up m3u4u's Dropbox delivery in your m3u4u account first. This downloader consumes the resulting download URLs; it does not replace cloud setup, synchronize your provider into m3u4u, publish updates to Dropbox, or manage Dropbox app keys, secrets, and access codes. A successful download cannot make an upstream file fresher than its last publication.
 
-## Features
+1. Follow the current cloud setup instructions in [m3u4u](https://m3u4u.com/) / its [help wiki](https://wiki.m3u4u.com/).
+2. Ensure your playlist and guide have been published successfully. Copy the actual download URLs shown in your account; the example code strings in this repository are placeholders.
+3. Put those URLs in your private `config.json`. Prefer the stable m3u4u download URLs when provided. Do not copy a temporary final CDN redirect URL.
+4. If using a Dropbox **file** sharing link instead, the downloader converts its display parameters to `dl=1`, preserves access parameters such as `rlkey`, and follows HTTP(S) redirects. Sign-in pages, preview HTML, and missing/expired links fail validation.
 
-- **Automated Downloads**: Pulls your playlist and EPG data directly from **m3u4u.com** every 24 hours.
-- **Local Caching**: The script stores the files locally so your media server can pull data without making multiple requests to external servers.
-- **Error Logging**: Tracks download attempts and logs any errors.
-- **Customizable Paths**: Allows easy configuration of where the files are stored on your system.
-  
-## How It Works
+Dropbox documents both download-link parameters and redirects in its [download-link guide](https://help.dropbox.com/share/force-download). A [2026 Dropbox Community discussion](https://community.dropbox.com/en/discussion/857034/dropbox-access-code-for-m3u4u-exceeds-256-characters-how-can-i-solve-this) also describes m3u4u's Dropbox setup. We could not independently inspect m3u4u's signed-in settings or read its wiki during this refresh; exact account screens, publication schedules, and service limits must be checked there. No live account credentials are used in this project's tests.
 
-The script automates downloading your M3U playlist and EPG files from **m3u4u.com**. It stores these files in a local directory, updating them daily without triggering excessive requests to **m3u4u**'s servers. Your media server software (such as Jellyfin or Plex) is configured to pull the data from these locally stored files, ensuring up-to-date information with minimal server impact.
+## What it does
 
-## Requirements
+- Follows cloud download redirects, with TLS verification and no HTTPS-to-HTTP downgrade.
+- Accepts UTF-8 extended channel playlists regardless of the URL's file extension. An HLS `.m3u8` URL **inside** a channel list is fine; an HLS segment/master manifest is not a channel list.
+- Accepts plain XMLTV or gzip-compressed XMLTV, detected by file content. Published `epg.xml` is always uncompressed.
+- Rejects empty, malformed, partial, oversized, or HTML responses. XMLTV must contain channels and programme listings; custom XML entities are rejected and external DTDs are not fetched.
+- Downloads to temporary files on the destination filesystem. Only after both files and optional cleaner output pass does it replace the local files.
+- Preserves the previous published files as `playlist_backup.m3u` and `epg_backup.xml`.
+- Prevents overlapping runs and records failed attempts as well as successful ones for its local download interval. HTTP 429/503 responses extend the delay using `Retry-After` when supplied.
+- Keeps private source URLs and cleaner diagnostics out of its console log.
 
-- **Git** for cloning this repository.
-- **dos2unix** to ensure the script runs smoothly on UNIX-based systems.
-- **cURL** to handle file downloads from the web.
-  
-## Installation
+It downloads playlist/guide **metadata**, not recordings of the channels. The default mode checks file structure; it does not probe channel availability or prove that guide listings are current.
 
-### Step 1: Clone the Repository
+## Install
 
-First, clone this repository to your local machine:
+Use Linux with **Python 3.10 or newer**. No pip packages, curl, PHP, or Composer are required for downloads. Docker is optional and must run on the same host for cleanup mode.
 
-```bash
-git clone https://github.com/SeanRiggs/automated-playlist-epg-downloader.git
-cd automated-playlist-epg-downloader
-```
-### Step 2: Install Necessary Utilities
-Ensure you have the necessary tools installed:
-```bash
+On Debian/Ubuntu, for example:
+
+```sh
 sudo apt-get update
-sudo apt-get install git dos2unix curl
-```
-### Step 3: Create Directories
-Set up directories for your playlist and EPG files:
-```bash
-mkdir -p /opt/mediastream/m3ufiles/m3u
-```
-
-### Step 4: Configure m3u4u
-- Create an Account: Head over to Link: m3u4u.com and create an account.
-- Add Your IPTV Playlist: Follow the instructions on m3u4u to add your IPTV provider’s M3U URL and organize your channels. Use m3u4u’s powerful grouping, filtering, and channel management features to customize the playlist to your preferences.
-- Set Up EPG: Configure your guide data using m3u4u's EPG Manager. Assign channel logos, align channels with EPG sources, and generate the XML guide.
-- **Copy URLs:*** Once your playlist and EPG are set up, copy the M3U and XML URLs provided by m3u4u. <i>** When copying the EPG URL, select the alternative non-compressed XML format vs. EPG.</i>
-
-### Step 5: Modify the Script
-Edit the script to include your m3u4u URLs:
-
-```bash
-#!/bin/sh
-
-# Configuration variables
-LOGFILE="/opt/mediastream/m3ufiles/m3u4u.log"
-M3UFILES_DIR="/opt/mediastream/m3ufiles"
-PLAYLIST_URL="http://m3u4u.com/m3u/YOUR_PLAYLIST_URL"
-EPG_URL="http://m3u4u.com/xml/YOUR_EPG_URL"
-
-echo "Script started at $(date)" >> $LOGFILE
-
-# Backup the existing playlist
-if [ -f "$M3UFILES_DIR/playlist.m3u" ]; then
-    cp "$M3UFILES_DIR/playlist.m3u" "$M3UFILES_DIR/playlist_backup.m3u"
-    echo "Backup of playlist.m3u created at $(date)" >> $LOGFILE
-else
-    echo "playlist.m3u does not exist at $(date)" >> $LOGFILE
-fi
-
-# Download the latest playlist from m3u4u
-PLAYLIST_ERROR=$(curl "$PLAYLIST_URL" -o "$M3UFILES_DIR/playlist.m3u" -f -s -S 2>&1)
-if [ $? -ne 0 ]; then
-    echo "Failed to download playlist.m3u from m3u4u.com at $(date)" >> $LOGFILE
-    echo "Error: $PLAYLIST_ERROR" >> $LOGFILE
-    echo "This error might mean: The URL is incorrect, m3u4u.com is down, or there's a network issue." >> $LOGFILE
-    echo "Please check your PLAYLIST_URL and internet connection." >> $LOGFILE
-    exit 1
-fi
-echo "Downloaded playlist.m3u from m3u4u.com at $(date)" >> $LOGFILE
-
-# Pause to avoid rate limit issues
-sleep 60
-
-# Download the latest EPG from m3u4u
-EPG_ERROR=$(curl "$EPG_URL" -o "$M3UFILES_DIR/epg.xml" -f -s -S 2>&1)
-if [ $? -ne 0 ]; then
-    echo "Failed to download epg.xml from m3u4u.com at $(date)" >> $LOGFILE
-    echo "Error: $EPG_ERROR" >> $LOGFILE
-    echo "This error might mean: The URL is incorrect, m3u4u.com is down, or there's a network issue." >> $LOGFILE
-    echo "Please check your EPG_URL and internet connection." >> $LOGFILE
-    exit 1
-fi
-echo "Downloaded epg.xml from m3u4u.com at $(date)" >> $LOGFILE
-
-echo "Script ended at $(date)" >> $LOGFILE
-```
-#### Step 5.5: make the script executable:
-```bash
-chmod +x /path/to/file/m3u4u.sh
+sudo apt-get install git python3 ca-certificates
+git clone https://github.com/SeanRiggs/Automated-Playlist-EPG-Downloader.git
+cd Automated-Playlist-EPG-Downloader
+cp config.example.json config.json
+chmod 600 config.json
 ```
 
-### Step 6: Automate with Cron
-To ensure the script runs daily, create a cron job:
-```bash
-crontab -e
-```
-Add this line to run the script every day at 2 AM:
-```bash
-0 2 * * * /path/to/your/script.sh >> /opt/mediastream/m3ufiles/m3u4u.log 2>&1
-```
-## Example Configuration for Media Servers
-Once the script is running and the files are being updated regularly, configure your media server to use the local paths for the playlist and EPG:
+Edit `config.json` with your playlist URL, EPG URL, and an absolute output directory. Keep the URLs private; `config.json` is ignored by Git. Configure a directory your scheduled user can write:
 
-Jellyfin: In "Live TV" settings, point the Playlist and EPG to /opt/mediastream/m3ufiles/playlist.m3u and /opt/mediastream/m3ufiles/epg.xml.
-Plex: In "Live TV & DVR" settings, specify the same local paths for the playlist and EPG files.
-
-### If Running Your Media Server Software in Docker:
-If you are running your media server software in docker and want to map your local file to the container, specify that in your media server volumes section in docker run or docker-compose. Here is a docker-compose example, mapping a volume that maps to your local host machine folder: 
-```docker
-  jellyfin:
-    container_name: jellyfin
-    image: lscr.io/linuxserver/jellyfin:latest
-    restart: always
-    environment:
-      - "PUID=1000"
-      - "PGID=1000"
-      - "UMASK=002"
-      - "TZ=America/New_York"
-    volumes:
-      - "/docker/appdata/jellyfin:/config"
-      - "/data:/data"
-      - "/opt/mediastream/m3ufiles:/opt/threadfin/m3ufiles"   <--- mapped to location of your m3u playlist
-    network_mode: "host"
+```sh
+sudo install -d -m 750 -o "$(id -u)" -g "$(id -g)" /opt/mediastream/m3ufiles
+./m3u4u.sh --check-config
+./m3u4u.sh
 ```
 
-## Contributing
-Contributions are welcome! Feel free to open an issue or submit a pull request if you encounter issues or have suggestions.
+The config check makes no network requests. A normal run waits 60 seconds between the playlist and EPG downloads by default. Run it as your normal service user, not through sudo, after directory permissions are set.
 
-## License
-This project is licensed under the MIT License.
+Both wrappers find `downloader.py` beside themselves and default to that directory's `config.json`, regardless of the working directory. Keep the checkout together. An external config works too:
 
+```sh
+/path/to/Automated-Playlist-EPG-Downloader/m3u4u.sh --config /path/to/private/config.json
+```
 
+## Optional Docker cleanup
 
+The downloader has **no Docker image of its own**. Cleanup uses an existing published cleaner image:
+
+```sh
+docker pull seanriggs/m3u-playlist-cleaner:latest
+./m3u4uAutoandClean.sh
+```
+
+The scheduled user needs access to the local Docker daemon. See the [cleanup guide](m3u4uAutoandCleanREADME.md) for the advanced FFprobe alternative, image updates, and limits. Pull the selected image before running: scheduled jobs deliberately use the locally installed image and do not silently upgrade it.
+
+## Schedule one mode
+
+Use `crontab -e` as the same user who owns the output directory. Replace the checkout path with its real absolute path. This example runs at 02:17 in the **server's timezone**:
+
+```cron
+17 2 * * * /path/to/Automated-Playlist-EPG-Downloader/m3u4u.sh >> /opt/mediastream/m3ufiles/m3u4u.log 2>&1
+```
+
+For cleanup, replace `m3u4u.sh` with `m3u4uAutoandClean.sh`; do not schedule both. Use a time after your upstream cloud publication normally completes. Rotate the log using your host's log rotation tools.
+
+The default local interval is **23 hours between attempt starts**, allowing a daily cron job some timing variation. The 60-second request gap and 23-hour interval are conservative project defaults, **not verified m3u4u limits and not a guarantee against throttling**. Follow your service's current rules and increase them as needed. There are no automatic retries within a run.
+
+A second run during the interval, server backoff, or an active download skips without contacting the source and exits 0. An error exits 1; an interrupted run exits 130. Check the log to distinguish a published update from a skipped run. Keep the same `data_dir` to retain scheduling state. Do not delete state to repeatedly retry a throttled service.
+
+## Configuration
+
+All settings belong in the JSON file. URLs are required; unspecified optional settings use these defaults. JSON does not support comments.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `playlist_url` | Required | Extended M3U/M3U8 download URL, HTTP(S). |
+| `epg_url` | Required | XMLTV or gzip XMLTV download URL, HTTP(S). |
+| `data_dir` | `/opt/mediastream/m3ufiles` | Absolute directory for published files, backups, lock, and state. |
+| `request_gap_seconds` | `60` | Wait between the two source downloads. |
+| `min_interval_seconds` | `82800` | Minimum time between attempt starts, including failures. |
+| `socket_timeout_seconds` | `30` | Timeout for blocking network operations. |
+| `download_timeout_seconds` | `300` | Elapsed download budget checked between reads; a blocked network operation can add up to its socket timeout. |
+| `max_download_bytes` | `104857600` | Maximum bytes for each downloaded file (100 MiB). |
+| `max_epg_bytes` | `524288000` | Maximum uncompressed XMLTV size (500 MiB). |
+| `cleaner_image` | `seanriggs/m3u-playlist-cleaner:latest` | Local image used only in cleanup mode. |
+| `cleaner_timeout_seconds` | `3600` | Maximum cleaner runtime before stopping its container. |
+
+Unknown config keys fail early. Intervals may be zero for isolated tests; do not copy test settings into a scheduled production job. URLs with embedded `user:password@host` are rejected; ordinary credential-bearing query/path parameters are preserved but not printed.
+
+## Connect your media server
+
+Point a client that supports local M3U/XMLTV inputs at:
+
+```text
+/opt/mediastream/m3ufiles/playlist.m3u
+/opt/mediastream/m3ufiles/epg.xml
+```
+
+For a containerized media server, add a read-only **directory** mount to its existing Compose service, for example:
+
+```yaml
+volumes:
+  - /opt/mediastream/m3ufiles:/iptv:ro
+```
+
+Then configure the client to read `/iptv/playlist.m3u` and `/iptv/epg.xml`. Mount the directory rather than individual files so atomic replacements remain visible. Arrange shared-group access if the reader uses a different account: new media files are created with mode `0640`; existing file modes are preserved. Keep the directory writable only by its owner, and keep credentials/backups out of public web roots.
+
+## Safety and troubleshooting
+
+- **HTTP error or HTML response:** confirm cloud authorization, successful publication, and the current download URLs in your account. The script cannot sign in or renew your cloud access.
+- **Guide not updated:** this checks syntax and nonempty listings, not listing dates or channel-ID matches. Check upstream publication and your media server's refresh settings.
+- **Skipped after a failed attempt:** expected interval/backoff protection. Correct the problem and wait for the next eligible scheduled attempt.
+- **Cleaner failed or produced no channels:** both current local files remain. Confirm the image is pulled and the Docker daemon is accessible. A valid cleaner output can still omit temporarily unavailable channels; use download-only mode if that tradeoff is unsuitable.
+- **Permission error:** the scheduled account must own/write the destination directory. For cleanup, Docker uses that account's UID/GID. Remote Docker daemons and bind-mount paths containing commas are not supported.
+- **Recovery:** stop the scheduled job before restoring `playlist_backup.m3u` or `epg_backup.xml`. These are the immediately previous files, not a versioned backup archive.
+
+Each published file is replaced atomically, so readers do not see half-written files. The two files are separate replacements, **not a transaction across both names**. Ordinary publication errors trigger rollback, but a power loss or forced kill between replacements can leave different generations; keep backups. Download/validation/cleaner failures happen before publication and preserve both existing files. A forced kill can leave a private temporary directory to remove after confirming no job is active.
+
+## Upgrade from the original scripts
+
+See [UPGRADING.md](UPGRADING.md) before replacing an existing scheduled installation. The shell filenames and final output filenames are retained, but URLs/configuration now live in JSON and Python 3.10+ is required. Embedded settings in an old copied shell script are not imported automatically.
+
+## Tests and contributions
+
+```sh
+sh -n m3u4u.sh m3u4uAutoandClean.sh
+python3 -m unittest discover -s tests -v
+```
+
+Tests use a local HTTP server, generated XMLTV/media, and a controlled Docker stub. They cover redirects, gzip, invalid downloads, timeouts, cooldowns, locking, credential-safe errors, cleaner failures, and publication rollback. GitHub Actions also runs the complete pipeline with the **real published basic and advanced cleaner images** against a locally generated WAV stream. It uses no live provider accounts. See the workflow for the opt-in Docker test command.
+
+Useful contributions include new cloud redirect fixtures, XMLTV compatibility cases, and clear troubleshooting examples. Include a regression test for behavior changes. Use synthetic playlists and guides; remove private URLs, access codes, and customer/channel data from bug reports.
+
+MIT licensed; see [LICENSE](LICENSE).

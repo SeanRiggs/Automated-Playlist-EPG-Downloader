@@ -1,92 +1,42 @@
-### The <code>m3u4uAutoandClean.sh</code> File
+# Optional Docker cleanup
 
-This file will perform the auto download like the standalone <code>m3u4u.sh</code>. However, it also has the automated docker m3u-playlist-cleaner container script included.
+Use the [main setup guide](README.md) to configure cloud delivery, private download URLs, and the output directory first. Then use `m3u4uAutoandClean.sh` in place of `m3u4u.sh`.
 
-That is found on my GitHub here: link: https://github.com/SeanRiggs/m3u-playlist-cleaner
+## Choose and pull an image
 
-## How to install this version:
-Create a path that you will clone the projects into. for example: 
-```bash
-sudo mkdir /opt/mediastream/m3ufiles
-```
-also, make a m3u directory for docker processing: 
-```bash
-sudo mkdir /opt/mediastream/m3ufiles/m3u
-```
-## Clone the m3u-playlist-cleaner here: 
-```bash
-cd /opt/mediastream/m3ufiles
-git clone https://github.com/SeanRiggs/m3u-playlist-cleaner.git
-```
-you do not need to build the docker image as per the m3u-playlist-cleaner ReadME, as the auto script uses the prebuilt image
+The default remains the basic cleaner:
 
-## Clone this repo to the same directory: 
-In/opt/mediastream/m3ufiles (or whatever path you built for your m3uFiles): 
-```bash
-git clone https://github.com/SeanRiggs/automated-playlist-epg-downloader.git
-```
-### Resulting file structure:
-<i>Move files as needed if you downloaded zip to match the structure below as this is what the script is expecting</i>
-```bash
-/opt/mediastream/m3ufiles
-├── m3u
-│   └── playlist.m3u (when copied after the first run)
-├── m3u-playlist-cleaner
-│   ├── Dockerfile
-│   ├── composer.lock
-│   ├── composer.php
-│   ├── playlist_validator.php
-│   └── vendor
-│       └── (all vendor files here)
-├── m3u4u.sh
-└── m3u4uAutoandClean.sh
+```sh
+docker pull seanriggs/m3u-playlist-cleaner:latest
+./m3u4uAutoandClean.sh --check-config
+./m3u4uAutoandClean.sh
 ```
 
-## Install all the dependencies:
-```bash
-sudo apt-get update
-sudo apt-get install git dos2unix curl
-```
-**install docker**
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-```
-Run install script:
-```bash
-sudo sh get-docker.sh
-```
-Start And Enable Docker:
-```docker
-sudo systemctl start docker
-sudo systemctl enable docker
-```
-Add your user to the “docker” group to run Docker commands without sudo:
-```bash
-sudo usermod -aG docker $USER
-```
-**make the script executable:**
-```bash
-chmod +x /opt/mediastream/m3ufiles/m3u4uAutoandClean.sh
+For FFprobe-based audio/video validation, set this property in your `config.json`:
+
+```json
+"cleaner_image": "seanriggs/advanced-ffprobe-m3u-cleaner:latest"
 ```
 
-**Automate with Cron**
-To ensure the script runs daily, create a cron job:
-```bash
-crontab -e
-```
-Add this line to run the script every day at 2 AM:
-```bash
-0 2 * * * /opt/mediastream/m3ufiles/m3u4uAutoandClean.sh >> /opt/mediastream/m3ufiles/m3u4u.log 2>&1
-```
-### Modify the Configurable Varriables in in the m3u4uAutoandClean.sh Script
-Use a text editor or VSCode to edit the script to include your m3u4u URLs or any directory you may have changed:
-**example in script:**
-```bash
-#!/bin/sh
+Then pull it before running:
 
-# Configuration variables
-LOGFILE="/opt/mediastream/m3ufiles/m3u4u.log"
-M3UFILES_DIR="/opt/mediastream/m3ufiles"
-PLAYLIST_URL="http://m3u4u.com/m3u/YOUR_PLAYLIST_URL"
-EPG_URL="http://m3u4u.com/xml/YOUR_EPG_URL"
+```sh
+docker pull seanriggs/advanced-ffprobe-m3u-cleaner:latest
+./m3u4uAutoandClean.sh
 ```
+
+Both integrations are covered by real Docker CI tests. They have different validation and metadata behavior; consult the [basic cleaner](https://github.com/SeanRiggs/m3u-playlist-cleaner) and [advanced cleaner](https://github.com/SeanRiggs/advanced-ffprobe-m3u-cleaner) documentation. Stream checks contact channel URLs and may consume provider connections. Temporary network failures can exclude channels, so cleanup is optional.
+
+There is no need to clone either cleaner repository, build it locally, or add a Docker Hub publishing token. Docker must be available to the scheduled user on the **same host**. Update images deliberately with `docker pull`; a digest reference can pin an exact release. The job checks that the selected image is installed before downloading files.
+
+## How publication works
+
+1. Download and validate both the channel list and guide in a private temporary directory.
+2. Give Docker only that new playlist through a read-only `/input` mount and a separate writable `/output` mount.
+3. Run without `-i` or `-t`, with the scheduled user's UID/GID. The cleaner receives `M3U_DIRECTORY=/input`, `OUTPUT_FILE=/output/playlist.m3u`, and `LOG_FILE=/dev/null`.
+4. Require a successful process **and a valid, nonempty output playlist**. Read the cleaner output, never fall back to its input. Stop/remove its container on timeout.
+5. Publish the cleaned playlist and downloaded XMLTV using the backup/replacement workflow described in the main README.
+
+The published guide is structurally validated but is not filtered to the surviving channels. Detailed cleaner output is suppressed because it may contain private stream URLs; console logs report pipeline success/failure. If you need detailed channel diagnosis, run the cleaner separately with private test files and follow its own logging instructions.
+
+Schedule only this wrapper for cleanup mode; the shared lock and interval state prevent overlapping runs. A cleanup failure leaves the existing playlist and guide available and returns a nonzero exit status.
