@@ -1,0 +1,51 @@
+name: Test downloads and Docker integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.10', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Check shell entry points and Python syntax
+        run: |
+          sh -n m3u4u.sh m3u4uAutoandClean.sh
+          python -m py_compile downloader.py
+      - name: Test with local HTTP fixtures
+        run: python -m unittest discover -s tests -v
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        image:
+          - seanriggs/m3u-playlist-cleaner:latest
+          - seanriggs/advanced-ffprobe-m3u-cleaner:latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Pull published cleaner
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker pull "$IMAGE"
+      - name: Test actual cleaner against generated local media
+        env:
+          CLEANER_TEST_IMAGE: ${{ matrix.image }}
+        run: |
+          export RUN_DOCKER_TESTS=1
+          export DOCKER_TEST_HOST="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+          python3 -m unittest discover -s tests -p test_downloader.py -k DockerIntegrationTests -v

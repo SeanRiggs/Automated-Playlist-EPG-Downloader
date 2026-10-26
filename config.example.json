@@ -1,0 +1,8 @@
+{
+  "playlist_url": "https://m3u4u.com/m3u/YOUR_PLAYLIST_CODE",
+  "epg_url": "https://m3u4u.com/xml/YOUR_EPG_CODE",
+  "data_dir": "/opt/mediastream/m3ufiles",
+  "request_gap_seconds": 60,
+  "min_interval_seconds": 82800,
+  "cleaner_image": "seanriggs/m3u-playlist-cleaner:latest"
+}
